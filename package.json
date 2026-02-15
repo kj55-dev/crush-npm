@@ -1,8 +1,8 @@
 {
-  "name": "@anthropic-ai/crush-corp",
+  "name": "@offlinecli/crush",
   "version": "0.43.0",
-  "description": "Crush - Glamourous agentic coding for all (corporate-friendly npm distribution)",
-  "license": "MIT",
+  "description": "Crush - Glamourous agentic coding for all (offline-friendly npm distribution by Charmbracelet)",
+  "license": "FSL-1.1-MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kj55-dev/crush-npm.git"
@@ -21,12 +21,17 @@
     "agent",
     "charm",
     "crush",
+    "charmbracelet",
     "enterprise",
     "corporate",
-    "air-gap"
+    "offline",
+    "air-gap",
+    "azure",
+    "foundry"
   ],
   "bin": {
-    "crush": "./bin/crush.js"
+    "crush": "./bin/crush.js",
+    "crush-setup": "./bin/setup.js"
   },
   "files": [
     "bin/",
@@ -37,11 +42,11 @@
     "node": ">=16"
   },
   "optionalDependencies": {
-    "@anthropic-ai/crush-corp-linux-x64": "0.43.0",
-    "@anthropic-ai/crush-corp-linux-arm64": "0.43.0",
-    "@anthropic-ai/crush-corp-darwin-x64": "0.43.0",
-    "@anthropic-ai/crush-corp-darwin-arm64": "0.43.0",
-    "@anthropic-ai/crush-corp-win32-x64": "0.43.0",
-    "@anthropic-ai/crush-corp-win32-arm64": "0.43.0"
+    "@offlinecli/crush-linux-x64": "0.43.0",
+    "@offlinecli/crush-linux-arm64": "0.43.0",
+    "@offlinecli/crush-darwin-x64": "0.43.0",
+    "@offlinecli/crush-darwin-arm64": "0.43.0",
+    "@offlinecli/crush-win32-x64": "0.43.0",
+    "@offlinecli/crush-win32-arm64": "0.43.0"
   }
 }

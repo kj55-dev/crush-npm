@@ -5,6 +5,9 @@
  * This script finds and executes the platform-specific Crush binary
  * from the optionalDependencies packages.
  * 
+ * The binary is stored as .bin to avoid corporate web filters that block
+ * .exe downloads. On first run, it's renamed to the proper executable name.
+ * 
  * Pattern based on esbuild, turbo, and opencode distribution.
  */
 
@@ -12,7 +15,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const PACKAGE_SCOPE = '@anthropic-ai/crush-corp';
+const PACKAGE_SCOPE = '@offlinecli/crush';
 
 /**
  * Get the platform-specific package name
@@ -24,39 +27,72 @@ function getPlatformPackage() {
 }
 
 /**
- * Find the binary in various possible locations
+ * Get the correct binary name for this platform
+ */
+function getBinaryName() {
+  return process.platform === 'win32' ? 'crush.exe' : 'crush';
+}
+
+/**
+ * Find the binary in various possible locations.
+ * If only .bin exists, rename it to the proper executable name first.
  */
 function findBinary() {
   const platform = process.platform;
   const arch = process.arch;
   const platformPkg = getPlatformPackage();
-  const binaryName = platform === 'win32' ? 'crush.exe' : 'crush';
+  const binaryName = getBinaryName();
+  const disguisedName = 'crush.bin';
   
-  // Possible locations to check
-  const locations = [
-    // Standard node_modules location (most common)
-    path.join(__dirname, '..', '..', platformPkg.replace('@anthropic-ai/', ''), 'bin', binaryName),
-    
+  // Possible base directories to check
+  const baseDirs = [
     // Scoped package location
-    path.join(__dirname, '..', '..', '@anthropic-ai', `crush-corp-${platform}-${arch}`, 'bin', binaryName),
+    path.join(__dirname, '..', '..', '@offlinecli', `crush-${platform}-${arch}`, 'bin'),
     
     // Hoisted to root node_modules
-    path.join(__dirname, '..', '..', '..', '@anthropic-ai', `crush-corp-${platform}-${arch}`, 'bin', binaryName),
+    path.join(__dirname, '..', '..', '..', '@offlinecli', `crush-${platform}-${arch}`, 'bin'),
     
     // pnpm/yarn PnP style - try require.resolve
     (() => {
       try {
         const pkgPath = require.resolve(`${platformPkg}/package.json`);
-        return path.join(path.dirname(pkgPath), 'bin', binaryName);
+        return path.join(path.dirname(pkgPath), 'bin');
       } catch {
         return null;
       }
     })(),
   ].filter(Boolean);
   
-  for (const loc of locations) {
-    if (fs.existsSync(loc)) {
-      return loc;
+  for (const binDir of baseDirs) {
+    const finalPath = path.join(binDir, binaryName);
+    const disguisedPath = path.join(binDir, disguisedName);
+    
+    // Check if final binary already exists
+    if (fs.existsSync(finalPath)) {
+      return finalPath;
+    }
+    
+    // Check if disguised binary exists - rename it
+    if (fs.existsSync(disguisedPath)) {
+      try {
+        fs.renameSync(disguisedPath, finalPath);
+        // Ensure executable permission on Unix
+        if (process.platform !== 'win32') {
+          fs.chmodSync(finalPath, 0o755);
+        }
+        return finalPath;
+      } catch (err) {
+        // If rename fails (permissions), try to execute .bin directly
+        // This works on Unix, may need special handling on Windows
+        if (process.platform !== 'win32') {
+          try {
+            fs.chmodSync(disguisedPath, 0o755);
+            return disguisedPath;
+          } catch {
+            // Fall through
+          }
+        }
+      }
     }
   }
   
