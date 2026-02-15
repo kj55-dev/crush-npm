@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write  # Required for npm trusted publishing (OIDC)
 
 jobs:
   build:
@@ -27,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Build platform packages
@@ -42,6 +43,9 @@ jobs:
           path: |
             dist/packages/
             package.json
+            bin/
+            README.md
+            LICENSE
           retention-days: 7
 
   publish:
@@ -49,10 +53,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: ${{ !inputs.dry_run }}
+    permissions:
+      contents: write
+      id-token: write  # Required for npm trusted publishing (OIDC)
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -61,27 +65,32 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: List downloaded artifacts
+        run: |
+          echo "=== Root ==="
+          ls -la
+          echo "=== dist/packages ==="
+          ls -la dist/packages/ || echo "No dist/packages"
+
+      # Publish platform packages first (they must exist before main package)
       - name: Publish platform packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for pkg_dir in dist/packages/*/; do
             if [ -d "$pkg_dir" ]; then
               echo "Publishing $(basename $pkg_dir)..."
               cd "$pkg_dir"
-              npm publish --access public || echo "Failed or already exists"
+              npm publish --access public --provenance || echo "Failed or already exists"
               cd - > /dev/null
             fi
           done
 
+      # Publish main package (references platform packages as optionalDependencies)
       - name: Publish main package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm publish --access public
+          npm publish --access public --provenance
 
       - name: Create git tag
         run: |
@@ -89,3 +98,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
           git push origin "v${{ inputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
