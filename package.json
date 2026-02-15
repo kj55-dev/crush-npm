@@ -1,0 +1,47 @@
+{
+  "name": "@anthropic-ai/crush-corp",
+  "version": "0.43.0",
+  "description": "Crush - Glamourous agentic coding for all (corporate-friendly npm distribution)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kj55-dev/crush-npm.git"
+  },
+  "homepage": "https://charm.sh/crush",
+  "bugs": {
+    "url": "https://github.com/charmbracelet/crush/issues"
+  },
+  "keywords": [
+    "ai",
+    "cli",
+    "coding",
+    "assistant",
+    "terminal",
+    "llm",
+    "agent",
+    "charm",
+    "crush",
+    "enterprise",
+    "corporate",
+    "air-gap"
+  ],
+  "bin": {
+    "crush": "./bin/crush.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/crush-corp-linux-x64": "0.43.0",
+    "@anthropic-ai/crush-corp-linux-arm64": "0.43.0",
+    "@anthropic-ai/crush-corp-darwin-x64": "0.43.0",
+    "@anthropic-ai/crush-corp-darwin-arm64": "0.43.0",
+    "@anthropic-ai/crush-corp-win32-x64": "0.43.0",
+    "@anthropic-ai/crush-corp-win32-arm64": "0.43.0"
+  }
+}
