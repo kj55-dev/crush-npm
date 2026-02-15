@@ -2,8 +2,8 @@ name: Check for new Crush releases
 
 on:
   schedule:
-    # Check daily at midnight UTC
-    - cron: '0 0 * * *'
+    # Check daily at 6 AM UTC
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,23 +12,32 @@ permissions:
 
 jobs:
   check:
-    name: Check for updates
+    name: Check for Crush updates
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get current version
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Get current packaged version
         id: current
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Current packaged version: $VERSION"
 
       - name: Get latest Crush release
         id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          LATEST=$(curl -s https://api.github.com/repos/charmbracelet/crush/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+          LATEST=$(gh api repos/charmbracelet/crush/releases/latest --jq '.tag_name' | sed 's/^v//')
           echo "version=${LATEST}" >> $GITHUB_OUTPUT
+          echo "Latest Crush version: $LATEST"
 
       - name: Compare versions
         id: compare
@@ -38,13 +47,13 @@ jobs:
           
           if [ "$CURRENT" != "$LATEST" ]; then
             echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "New version available: $LATEST (current: $CURRENT)"
+            echo "🆕 New version available: $LATEST (currently packaging: $CURRENT)"
           else
             echo "needs_update=false" >> $GITHUB_OUTPUT
-            echo "Already up to date: $CURRENT"
+            echo "✓ Already up to date: $CURRENT"
           fi
 
-      - name: Create issue for update
+      - name: Create update issue
         if: steps.compare.outputs.needs_update == 'true'
         uses: actions/github-script@v7
         with:
@@ -68,8 +77,46 @@ jobs:
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: `Update to Crush v${latest}`,
-                body: `A new version of Crush is available!\n\n- Current version: ${current}\n- Latest version: ${latest}\n\nTo update, run the publish workflow with version \`${latest}\`.\n\n[View release notes](https://github.com/charmbracelet/crush/releases/tag/v${latest})`,
-                labels: ['update']
+                title: `📦 Update to Crush v${latest}`,
+                body: `## New Crush Release Available
+            
+            A new version of Crush has been released by Charmbracelet.
+            
+            | | Version |
+            |---|---------|
+            | **Currently packaging** | v${current} |
+            | **Latest available** | v${latest} |
+            
+            ## Action Required
+            
+            Run the [Publish workflow](../../actions/workflows/publish.yml) with version \`${latest}\` to update.
+            
+            ## Links
+            
+            - [Crush v${latest} Release Notes](https://github.com/charmbracelet/crush/releases/tag/v${latest})
+            - [Crush Repository](https://github.com/charmbracelet/crush)
+            
+            ---
+            *This issue was automatically created by the release checker workflow.*`,
+                labels: ['update', 'automated']
               });
+              
+              console.log(`Created issue for Crush v${latest}`);
+            } else {
+              console.log(`Issue for v${latest} already exists`);
             }
+
+      - name: Summary
+        run: |
+          echo "## Crush Version Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | Version |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Currently packaging | v${{ steps.current.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Latest available | v${{ steps.latest.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.compare.outputs.needs_update }}" = "true" ]; then
+            echo "🆕 **Update available!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✓ **Up to date**" >> $GITHUB_STEP_SUMMARY
+          fi

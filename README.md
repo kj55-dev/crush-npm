@@ -1,8 +1,13 @@
 # @offlinecli/crush
 
+[![npm version](https://img.shields.io/npm/v/@offlinecli/crush.svg)](https://www.npmjs.com/package/@offlinecli/crush)
+[![npm downloads](https://img.shields.io/npm/dm/@offlinecli/crush.svg)](https://www.npmjs.com/package/@offlinecli/crush)
+
 Offline-friendly npm distribution of [Crush](https://github.com/charmbracelet/crush) by [Charmbracelet](https://charm.sh).
 
 This package works behind **corporate firewalls** where GitHub is blocked but npm registry is accessible.
+
+> **Note**: This is an unofficial redistribution. For the official package, see [@charmland/crush](https://www.npmjs.com/package/@charmland/crush).
 
 ## Installation
 

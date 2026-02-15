@@ -8,95 +8,172 @@ on:
         required: true
         type: string
       dry_run:
-        description: 'Dry run (do not publish)'
+        description: 'Dry run (build only, do not publish)'
         required: false
         type: boolean
         default: false
 
+# Top-level permissions for the workflow
 permissions:
   contents: write
-  id-token: write  # Required for npm trusted publishing (OIDC)
+  id-token: write  # Required for npm Trusted Publishing (OIDC)
 
 jobs:
   build:
-    name: Build packages
+    name: Build npm packages
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ inputs.version }}
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Build platform packages
+      - name: Download Crush binaries and build packages
         run: |
           chmod +x scripts/build.sh
           ./scripts/build.sh "${{ inputs.version }}"
 
-      - name: Upload artifacts
+      - name: Verify build output
+        run: |
+          echo "=== Built packages ==="
+          ls -la dist/packages/
+          echo ""
+          for pkg in dist/packages/*/; do
+            echo "Package: $(basename $pkg)"
+            ls -la "$pkg/bin/" 2>/dev/null || echo "  No bin directory"
+            cat "$pkg/package.json" | head -5
+            echo ""
+          done
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: npm-packages
+          name: npm-packages-${{ inputs.version }}
           path: |
             dist/packages/
             package.json
             bin/
             README.md
             LICENSE
-          retention-days: 7
+          retention-days: 30
 
   publish:
-    name: Publish to npm
+    name: Publish to npm registry
     needs: build
     runs-on: ubuntu-latest
     if: ${{ !inputs.dry_run }}
+    environment: npm-publish  # Optional: use GitHub environment for approvals
     permissions:
       contents: write
-      id-token: write  # Required for npm trusted publishing (OIDC)
+      id-token: write  # Required for npm Trusted Publishing (OIDC)
     steps:
-      - name: Download artifacts
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: npm-packages
+          name: npm-packages-${{ inputs.version }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: List downloaded artifacts
+      - name: Verify artifacts
         run: |
-          echo "=== Root ==="
+          echo "=== Downloaded artifacts ==="
           ls -la
-          echo "=== dist/packages ==="
-          ls -la dist/packages/ || echo "No dist/packages"
+          echo ""
+          echo "=== Platform packages ==="
+          ls -la dist/packages/
+          echo ""
+          echo "=== Main package.json ==="
+          cat package.json
 
-      # Publish platform packages first (they must exist before main package)
+      # Platform packages must be published first since main package depends on them
       - name: Publish platform packages
         run: |
+          echo "Publishing platform-specific packages..."
+          
           for pkg_dir in dist/packages/*/; do
             if [ -d "$pkg_dir" ]; then
-              echo "Publishing $(basename $pkg_dir)..."
+              pkg_name=$(basename "$pkg_dir")
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "Publishing: $pkg_name"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              
               cd "$pkg_dir"
-              npm publish --access public --provenance || echo "Failed or already exists"
+              
+              # Publish with provenance (automatic with trusted publishing)
+              if npm publish --access public --provenance; then
+                echo "✓ Successfully published $pkg_name"
+              else
+                echo "⚠ Failed to publish $pkg_name (may already exist)"
+              fi
+              
               cd - > /dev/null
             fi
           done
 
-      # Publish main package (references platform packages as optionalDependencies)
+      # Publish main wrapper package
       - name: Publish main package
         run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Publishing: @offlinecli/crush (main package)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
           npm publish --access public --provenance
+          
+          echo "✓ Successfully published @offlinecli/crush"
 
-      - name: Create git tag
+      - name: Create release tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          
+          VERSION="${{ inputs.version }}"
+          
+          # Check if tag already exists
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists, skipping"
+          else
+            git tag -a "v$VERSION" -m "Release v$VERSION - Crush npm distribution"
+            git push origin "v$VERSION"
+            echo "✓ Created and pushed tag v$VERSION"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## 🎉 Publish Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Published Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Install Command |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| @offlinecli/crush | \`npm install -g @offlinecli/crush\` |" >> $GITHUB_STEP_SUMMARY
+          for pkg_dir in dist/packages/*/; do
+            pkg_name=$(basename "$pkg_dir")
+            echo "| @offlinecli/$pkg_name | (auto-installed) |" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm install -g @offlinecli/crush" >> $GITHUB_STEP_SUMMARY
+          echo "crush --version" >> $GITHUB_STEP_SUMMARY
+          echo "crush-setup" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
